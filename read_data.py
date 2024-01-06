@@ -3,6 +3,8 @@ import matplotlib.pyplot as plt
 import random
 import json
 from datetime import datetime
+import requests
+
 #reading log file
 df = pd.read_csv('./event_20240101.csv',
                  usecols=["LogUserIDOTT", "playing_session", "EventType", "EventCategory", "League", "Platform",
@@ -10,12 +12,28 @@ df = pd.read_csv('./event_20240101.csv',
                           "ChannelNoOTT", "ChannelName", "ChannelGroup", "RealTimePlaying", "device_id",
                           "SubCompanyNameVN", "LocationNameVN"], dtype=object)
 
-data = df.loc[df.Platform != 'box iptv'].head(15)  # data frame type
+data = df.loc[df.Platform != 'box iptv'].head(3)  # data frame type
 
 data_frame = []
 # format playing_session
 range_list = [(20, 26)]
 format = '%Y-%m-%d %H:%M:%S'
+
+#------------------------------------CLEVER TAP--------------------------------------
+
+# Define các campaign
+headers =  {
+    'X-CleverTap-Account-Id': '4W5-565-W95Z',  # project_id
+    'X-CleverTap-Passcode': 'ACO-JIZ-YXKL',  # Passcode
+    'Content-Type': 'application/json; charset=utf-8',
+}
+
+params = (
+    ('batch_size', '50'),
+)
+
+
+#response = requests.post('https://sg1.api.clevertap.com/1/upload', headers=headers, params=params, data=data1)
 
 
 def format_playing_session(str):
@@ -29,7 +47,6 @@ def format_playing_session(str):
         else:
             res += chr
     return res
-
 
 def convert_string_to_datetime(str):
     str = datetime.strptime(str, format)
@@ -48,7 +65,6 @@ def convert_playingsession_to_epochtime(str):
         return new_str
     else:
         return str
-
 
 # -----mapping data------
 def mapping_data():
@@ -78,9 +94,21 @@ def mapping_data():
             break
 
 mapping_data()
-print(data_frame)
 
+#print(data_frame)
 
+new_data_frame = str(data_frame)
+
+dict1 = {}
+dict1["d"] = new_data_frame
+data3 = str(dict1)
+
+#print(data3)
+
+response = requests.post('https://sg1.api.clevertap.com/1/upload', headers=headers, params=params, data=data3)
+
+print(response)
+print(response.json())
 
 # for index, row in data.iterrows():
 #     print(row['LogUserIDOTT'], row["playing_session"], convert_playingsession_to_epochtime((row['playing_session'])))
