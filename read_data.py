@@ -12,7 +12,7 @@ df = pd.read_csv('./event_20240101.csv',
                           "ChannelNoOTT", "ChannelName", "ChannelGroup", "RealTimePlaying", "device_id",
                           "SubCompanyNameVN", "LocationNameVN"], dtype=object)
 
-data = df.loc[df.Platform != 'box iptv'].head(3)  # data frame type
+data = df.loc[df.Platform != 'box iptv'].head(4)  # data frame type
 
 data_frame = []
 # format playing_session
@@ -29,11 +29,8 @@ headers =  {
 }
 
 params = (
-    ('batch_size', '50'),
+    ('batch_size', '100'),
 )
-
-
-#response = requests.post('https://sg1.api.clevertap.com/1/upload', headers=headers, params=params, data=data1)
 
 
 def format_playing_session(str):
@@ -67,60 +64,60 @@ def convert_playingsession_to_epochtime(str):
         return str
 
 # -----mapping data------
+
 def mapping_data():
     for index, row in data.iterrows():
         for i in range(0, len(data)):
-            data_frame.append([{'identity': row['LogUserIDOTT'],  # rec["user_id"], #LogUserIDOTT
-                                'ts': str(convert_playingsession_to_epochtime(row['playing_session'])),
-                                # int(float(rec["playStartTime"])) / 1000, #playing_session (xu ly theo dang epoch)
-                                'type': row['EventType'],  # EventType
-                                "evtName": "Play_event",  # dùng để phân biệt loại content nào VOD, CHANNEL, EVENT.
-                                'evtData': {
-                                    'eventCategory': row['EventCategory'],
-                                    'league': row['League'],
-                                    'platform': row['Platform'],  # platform"
-                                    'platform_group': row['PlatformGroup'],  # map_platform(rec["platform"]),
-                                    'contentID': row['EventIDOTT'],  # rec["contentID"],  #EventIDOTT
-                                    'contentName': row['EventTitle'],  # rec["contentName"], #EventTitle
-                                    'channelNoOTT': row['ChannelNoOTT'],
-                                    'channelName': row['ChannelName'],
-                                    'channelGroup': row['ChannelGroup'],
-                                    'realTimePlaying': row['RealTimePlaying'],
-                                    'device_id': row['device_id'],
-                                    'subCompanyNameVN': row['SubCompanyNameVN'],
-                                    'locationNameVN': row['LocationNameVN']
+            data_frame.append({"identity": row["LogUserIDOTT"],  # rec["user_id"], #LogUserIDOTT
+                                "ts": str(convert_playingsession_to_epochtime(row["playing_session"])),
+                                "type": 'event', #row["EventType"],  # EventType
+                                "evtName": "VOD",  # dùng để phân biệt loại content nào VOD, CHANNEL, EVENT.
+                                "evtData": {
+                                     "platform": row["Platform"],  # platform"
+                                     "platform_group": row["PlatformGroup"],  # map_platform(rec["platform"]),
+                                     "device_id": row["device_id"],
+                                     #"eventCategory": row["EventCategory"],
+                                     "contentID": row["EventIDOTT"],  # rec["contentID"],  #EventIDOTT
+                                     #"contentName": row["EventTitle"],  # rec["contentName"], #EventTitle
+                                     "channelNoOTT": row["ChannelNoOTT"],
+                                     #"channelName": row["ChannelName"],
+                                     #"channelGroup": row["ChannelGroup"],
+                                     "realTimePlaying": row["RealTimePlaying"],
+                                     #"league": row["League"],
+                                     #"subCompanyNameVN": row["SubCompanyNameVN"],
+                                     #"locationNameVN": row["LocationNameVN"],
+                                     #"type": row["EventType"]  # EventType
                                 }
-                                }])
+                                })
             break
 
-mapping_data()
 
-#print(data_frame)
+def main():
+    mapping_data()
+    new_data_frame = str(data_frame)
+    dict_of_dicts = {'d': data_frame}
+    data4 = "{}".format(dict_of_dicts)
+    print(data4)
+    #print(type(data4))
 
-new_data_frame = str(data_frame)
+    #pushing log
+    response = requests.post('https://sg1.api.clevertap.com/1/upload', headers=headers, data=data4)
+    print(response)
+    print(response.json())
 
-dict1 = {}
-dict1["d"] = new_data_frame
-data3 = str(dict1)
 
-#print(data3)
+if __name__ == "__main__":
+    main()
 
-response = requests.post('https://sg1.api.clevertap.com/1/upload', headers=headers, params=params, data=data3)
 
-print(response)
-print(response.json())
+
+
 
 # for index, row in data.iterrows():
-#     print(row['LogUserIDOTT'], row["playing_session"], convert_playingsession_to_epochtime((row['playing_session'])))
+#     print(row['LogUserIDOTT'], row["EventType"])
 
 
-# for index, row in data.iterrows():
-#     print(row["playing_session"], row['device_id'] , row['LocationNameVN'])
 
 
-# -------list--------
-# for i in data_frame:
-#     print(i.get('evtData')['eventCategory'])
-# ----function isstance-------
-# isinstance(i,dict)
+
 
