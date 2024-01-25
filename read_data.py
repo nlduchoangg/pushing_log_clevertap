@@ -9,10 +9,8 @@ from unidecode import unidecode
 import time
 import math
 from tqdm import tqdm
-import re
 
 
-re_searh = re.compile(r'\.')
 # reading log file
 df = pd.read_csv('./event_20240101.csv',
                  usecols=["LogUserIDOTT", "playing_session", "EventType", "EventCategory", "League", "Platform",
