@@ -9,16 +9,14 @@ from unidecode import unidecode
 import time
 import math
 from tqdm import tqdm
-
+import aiohttp
+import asyncio
+import config
 
 # reading log file
-df = pd.read_csv('./event_20240101.csv',
-                 usecols=["LogUserIDOTT", "playing_session", "EventType", "EventCategory", "League", "Platform",
-                          "PlatformGroup", "EventIDOTT", "EventTitle",
-                          "ChannelNoOTT", "ChannelName", "ChannelGroup", "RealTimePlaying", "device_id",
-                          "SubCompanyNameVN", "LocationNameVN"], dtype=object)
+df = pd.read_csv(config.filepath, usecols=config.columns_filer, dtype=object)
 
-data = df.loc[df.Platform != 'box iptv'].head(600000)  # data frame type
+data = df.loc[df.Platform != 'box iptv']  # data frame type
 
 data_frame = [] #biến lưu cấu trúc của evtData sau khi format lại(check struct của evtData trong hàm mappingdata()
 # format playing_session
@@ -28,11 +26,7 @@ format = '%Y-%m-%d %H:%M:%S'
 # ------------------------------------CLEVER TAP--------------------------------------
 
 # Define các campaign
-headers = {
-    'X-CleverTap-Account-Id': '4W5-565-W95Z',  # project_id
-    'X-CleverTap-Passcode': 'ACO-JIZ-YXKL',  # Passcode
-    'Content-Type': 'application/json; charset=utf-8',
-}
+headers = config.headers_clevertap
 
 params = (
     ('batch_size', '150'),
@@ -104,99 +98,82 @@ def convert_unixpoch(time_data):
 
             return timestamp_unix_epoch
         else:
-            # print(f"{timestamp_string} không phải là kiểu Unix Epoch.")
             return timestamp_string
     except Exception as e:
         print(e)
 
 # -------1 SỐ HÀM BỔ TRỢ ĐỂ CHUYỂN ĐỔI PLAYING_SESSION SANG DẠNG EPOCH TIME-------
 
+def process_row(row):
+    return {
+        "identity": str(row["LogUserIDOTT"]),
+        "ts": str(convert_unixpoch(convert_playingsession_to_epochtime(str(row["playing_session"])))),
+        "type": 'event',
+        "evtName": "Log_User_IDOTT",
+        "evtData": {
+            "platform": row["Platform"],
+            "platform_group": row["PlatformGroup"],
+            "device_id": row["device_id"],
+            "event_Category": unidecode(row["EventCategory"]),
+            "contentID": row["EventIDOTT"],
+            "contentName": unidecode(row["EventTitle"]),
+            "channelNoOTT": row["ChannelNoOTT"],
+            "channelName": unidecode(str(row["ChannelName"])),
+            "channelGroup": unidecode(str(row["ChannelGroup"])),
+            "realTimePlaying": row["RealTimePlaying"],
+            "league": unidecode(str(row["League"])),
+            "subCompanyNameVN": unidecode(str(row["SubCompanyNameVN"])),
+            "locationNameVN": unidecode(str(row["LocationNameVN"])),
+            "type": unidecode(str(row["EventType"]))
+        }
+    }
 
-# -----mapping data into dataframe------
-def mapping_data():
-    for index, row in data.iterrows():
-        for i in range(0, len(data)):
-            data_frame.append({"identity": str(row["LogUserIDOTT"]),  # rec["user_id"], #LogUserIDOTT
-                               "ts": str(convert_unixpoch(convert_playingsession_to_epochtime(str(row["playing_session"])))),
-                               "type": 'event',  # row["EventType"],  # EventType.
-                               "evtName": "VOD",  # dùng để phân biệt loại content nào VOD, CHANNEL, EVENT.
-                               "evtData": {
-                                   "platform": row["Platform"],  # platform"
-                                   "platform_group": row["PlatformGroup"],  # map_platform(rec["platform"]),
-                                   "device_id": row["device_id"],
-                                   "event_Category": unidecode(row["EventCategory"]),  # 1
-                                   "contentID": row["EventIDOTT"],  # rec["contentID"],  #EventIDOTT
-                                   "contentName": unidecode(row["EventTitle"]),  # rec["contentName"], #EventTitle
-                                   "channelNoOTT": row["ChannelNoOTT"],
-                                   "channelName": unidecode(str(row["ChannelName"])),
-                                   "channelGroup": unidecode(str(row["ChannelGroup"])),
-                                   "realTimePlaying": row["RealTimePlaying"],
-                                   "league": unidecode(str(row["League"])),  # 4
-                                   "subCompanyNameVN": unidecode(str(row["SubCompanyNameVN"])),
-                                   "locationNameVN": unidecode(str(row["LocationNameVN"])),  # 7
-                                   "type": unidecode(str(row["EventType"]))  # EventType #6
-                               }
-                               })
-            break
+async def send_data_to_clevertap(chunk_data, headers, semaphore):
+    data4 = json.dumps({"d": chunk_data})
+    async with semaphore:
+        async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=60)) as session:
+            async with session.post('https://sg1.api.clevertap.com/1/upload', headers=headers, data=data4) as response:
+                try:
+                    response.raise_for_status()  # Nếu có lỗi HTTP, nó sẽ ném một ngoại lệ
+                    result = await response.json()
+                    print(result)
+                    #print(data4)
+                except aiohttp.ContentTypeError:
+                    print("Server trả về nội dung không phải là JSON:", await response.text())
+                except json.decoder.JSONDecodeError:
+                    print("Không thể phân tích JSON từ phản hồi.")
+                except aiohttp.ClientResponseError as e:
+                    print(f"Error in response: {e}")
 
-# def mapping_data():
-#     for index, row in data.iterrows():
-#         for i in range(0, len(data)):
-#             data_frame.append({"identity": row["LogUserIDOTT"],  # rec["user_id"], #LogUserIDOTT
-#                                "ts": row["playing_session"], #str(convert_unixpoch(convert_playingsession_to_epochtime(row["playing_session"]))),
-#                                "type": 'event',  # row["EventType"],  # EventType.
-#                                "evtName": "VOD",  # dùng để phân biệt loại content nào VOD, CHANNEL, EVENT.
-#                                "evtData": {
-#                                    "platform": row["Platform"],  # platform"
-#                                    "platform_group": row["PlatformGroup"],  # map_platform(rec["platform"]),
-#                                    "device_id": row["device_id"],
-#                                    "event_Category": unidecode(row["EventCategory"]),  # 1
-#                                    "contentID": row["EventIDOTT"],  # rec["contentID"],  #EventIDOTT
-#                                    "contentName": unidecode(row["EventTitle"]),  # rec["contentName"], #EventTitle
-#                                    "channelNoOTT": row["ChannelNoOTT"],
-#                                    "channelName": unidecode(str(row["ChannelName"])),
-#                                    "channelGroup": unidecode(str(row["ChannelGroup"])),
-#                                    "realTimePlaying": row["RealTimePlaying"],
-#                                    "league": unidecode(str(row["League"])),  # 4
-#                                    "subCompanyNameVN": unidecode(str(row["SubCompanyNameVN"])),
-#                                    "locationNameVN": unidecode(str(row["LocationNameVN"])),  # 7
-#                                    "type": unidecode(str(row["EventType"]))  # EventType #6
-#                                }
-#                                })
-#             break
 
-# -----mapping data into dataframe------
 
-def main():
-    # thực hiện mapping data vào dataframe
-    mapping_data()
+async def main():
+    data_frame = data.apply(process_row, axis=1).tolist()
 
-    #Xử lý mỗi lần gửi sẽ là 1000 record để đảm bảo gửi tất cả data lên clevertap.
-    loop_size = 0;
+    loop_size = 0
     chunk_size = 1000
+    max_concurrent_tasks = 10  # Số lượng task tối đa chạy đồng thời
+
     num_chunks = len(data)
     quotient, remainder = divmod(num_chunks, chunk_size)
-    print(loop_size)
-    if(remainder == 0):
+
+    if remainder == 0:
         loop_size = quotient
     else:
         loop_size = quotient + 1
 
-    # Lặp theo loop_size(số lần lặp để gửi tất cả data lên clevertap).
+    print(loop_size)
+    semaphore = asyncio.Semaphore(max_concurrent_tasks)
+    tasks = []
+
     for i in range(loop_size):
         chunk_start = i * chunk_size
         chunk_end = (i + 1) * chunk_size
-
         chunk_data = data_frame[chunk_start:chunk_end]
+        task = send_data_to_clevertap(chunk_data, headers, semaphore)
+        tasks.append(task)
 
-        dict_of_dicts = {'d': chunk_data}  # type dict
-        data4 = "{}".format(dict_of_dicts)
-        #print(data4)
-
-        #Gửi yêu cầu POST lên clevertap với data=data4
-        response = requests.post('https://sg1.api.clevertap.com/1/upload', headers=headers, data=data4)
-        print(response.json())
+    await asyncio.gather(*tasks)
 
 if __name__ == "__main__":
-    main()
-
+    asyncio.run(main())
