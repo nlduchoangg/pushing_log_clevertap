@@ -40,7 +40,7 @@ def format_playing_session(time_data):
         res = "1980-01-01 07:00:00"
     elif time_data is np.nan:
         res = "1980-01-01 07:00:00"
-    elif time_data == 'nan':
+    elif time_data == 'nan' or time_data == 'null' or time_data == '' or time_data == ' ':
         res = "1980-01-01 07:00:00"
     else:
         new_str = time_data.replace('T', ' ')
@@ -139,12 +139,11 @@ async def send_data_to_clevertap(chunk_data, headers, semaphore):
                     print(result)
                     #print(data4)
                 except aiohttp.ContentTypeError:
-                    print("Server trả về nội dung không phải là JSON:", await response.text())
+                    print("Server returned content that was not JSON:", await response.text())
                 except json.decoder.JSONDecodeError:
-                    print("Không thể phân tích JSON từ phản hồi.")
+                    print("Unable to parse JSON from response.")
                 except aiohttp.ClientResponseError as e:
                     print(f"Error in response: {e}")
-
 
 
 async def main():
