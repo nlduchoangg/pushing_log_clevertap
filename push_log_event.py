@@ -72,7 +72,7 @@ def process_row(row):
         "ts1": row["playing_session"],
         "ts": str(convert_to_datetime(str(row["playing_session"]))),
         "type": 'event',
-        "evtName": "Log_User_IDOTT_5",
+        "evtName": "Log_User_IDOTT_3",
         "evtData": {
             "platform": row["Platform"],
             "platform_group": row["PlatformGroup"],
