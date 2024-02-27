@@ -69,7 +69,6 @@ def convert_to_datetime(input_data):
 def process_row(row):
     return {
         "identity": str(row["LogUserIDOTT"]),
-        "ts1": row["playing_session"],
         "ts": str(convert_to_datetime(str(row["playing_session"]))),
         "type": 'event',
         "evtName": "Log_User_IDOTT_3",
